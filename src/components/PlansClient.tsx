@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 
@@ -51,7 +51,11 @@ export default function PlansClient({ email }: { email: string }) {
   }
 
   useEffect(() => {
-    loadPlans();
+    const t = setTimeout(() => {
+      loadPlans();
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleDay(day: string) {
@@ -243,7 +247,11 @@ export default function PlansClient({ email }: { email: string }) {
           <li key={plan.id} className="rounded border p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h3 className="font-semibold">{plan.title}</h3>
+                <h3 className="font-semibold">
+                  <Link href={`/plans/${plan.id}`} className="underline">
+                    {plan.title}
+                  </Link>
+                </h3>
                 <p className="text-sm text-gray-600">
                   Deadline: {plan.deadline.slice(0, 10)} · {plan.hoursPerDay}{" "}
                   h/day

@@ -23,3 +23,26 @@ export const planSchema = z.object({
 });
 
 export const planUpdateSchema = planSchema.partial();
+
+export const subjectSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Subject name is required")
+    .max(100, "Name is too long"),
+  deadline: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((v) => !v || !isNaN(Date.parse(v)), "Invalid subject deadline"),
+});
+
+export const subjectUpdateSchema = subjectSchema.partial();
+
+export const outcomeSchema = z.object({
+  description: z
+    .string()
+    .trim()
+    .min(1, "Outcome description is required")
+    .max(300, "Description is too long"),
+});
