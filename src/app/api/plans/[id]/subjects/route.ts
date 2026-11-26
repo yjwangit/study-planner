@@ -17,7 +17,11 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const subjects = await prisma.subject.findMany({
     where: { planId: id },
-    include: { outcomes: { orderBy: { id: "asc" } } },
+    include: {
+      outcomes: { orderBy: { id: "asc" } },
+      tasks: { orderBy: { id: "asc" } },
+      resources: { orderBy: { id: "asc" } },
+    },
     orderBy: { id: "asc" },
   });
   return NextResponse.json(subjects);
@@ -48,7 +52,7 @@ export async function POST(req: Request, { params }: Ctx) {
       name: parsed.data.name,
       deadline: parsed.data.deadline ? new Date(parsed.data.deadline) : null,
     },
-    include: { outcomes: true },
+    include: { outcomes: true, tasks: true, resources: true },
   });
   return NextResponse.json(subject, { status: 201 });
 }

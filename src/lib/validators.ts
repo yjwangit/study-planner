@@ -46,3 +46,49 @@ export const outcomeSchema = z.object({
     .min(1, "Outcome description is required")
     .max(300, "Description is too long"),
 });
+
+export const STATUSES = ["NOT_STARTED", "IN_PROGRESS", "COMPLETE"] as const;
+export const RESOURCE_TYPES = [
+  "Reading",
+  "Video",
+  "Notes",
+  "Exercise",
+  "Other",
+] as const;
+
+export const taskSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, "Task title is required")
+    .max(150, "Title is too long"),
+  estimatedHours: z
+    .number({ message: "Estimated hours must be a number" })
+    .min(0.25, "At least 0.25 hours")
+    .max(100, "At most 100 hours"),
+  outcomeId: z.string().nullable().optional(),
+  status: z.enum(STATUSES).optional(),
+});
+
+export const taskUpdateSchema = taskSchema.partial();
+
+export const resourceSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, "Resource title is required")
+    .max(150, "Title is too long"),
+  type: z.enum(RESOURCE_TYPES),
+  url: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .refine(
+      (v) => !v || /^https?:\/\//i.test(v),
+      "URL must start with http:// or https://",
+    ),
+  outcomeId: z.string().nullable().optional(),
+});
+
+export const resourceUpdateSchema = resourceSchema.partial();

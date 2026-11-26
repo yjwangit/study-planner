@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const { name, deadline } = parsed.data;
   const result = await prisma.subject.updateMany({
-    where: { id, plan: { userId } }, // 通过所属计划确认是你的
+    where: { id, plan: { userId } },
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(deadline !== undefined
@@ -35,7 +35,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const subject = await prisma.subject.findFirst({
     where: { id, plan: { userId } },
-    include: { outcomes: true },
+    include: { outcomes: true, tasks: true, resources: true },
   });
   return NextResponse.json(subject);
 }

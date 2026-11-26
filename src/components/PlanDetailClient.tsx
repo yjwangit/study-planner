@@ -4,11 +4,34 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Outcome = { id: string; description: string };
+type Task = {
+  id: string;
+  title: string;
+  estimatedHours: number;
+  outcomeId: string | null;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
+};
+type Resource = {
+  id: string;
+  title: string;
+  type: string;
+  url: string | null;
+  outcomeId: string | null;
+};
 type Subject = {
   id: string;
   name: string;
   deadline: string | null;
   outcomes: Outcome[];
+  tasks: Task[];
+  resources: Resource[];
+};
+
+const RESOURCE_TYPES = ["Reading", "Video", "Notes", "Exercise", "Other"];
+const STATUS_LABEL: Record<Task["status"], string> = {
+  NOT_STARTED: "Not started",
+  IN_PROGRESS: "In progress",
+  COMPLETE: "Complete",
 };
 
 async function api(url: string, method: string, body?: unknown) {
@@ -39,8 +62,22 @@ export default function PlanDetailClient({
   const [deadline, setDeadline] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+
   const [newOutcome, setNewOutcome] = useState<Record<string, string>>({});
   const [outcomeError, setOutcomeError] = useState<Record<string, string>>({});
+
+  const [taskForm, setTaskForm] = useState<
+    Record<string, { title: string; hours: string; outcomeId: string }>
+  >({});
+  const [taskError, setTaskError] = useState<Record<string, string>>({});
+
+  const [resForm, setResForm] = useState<
+    Record<
+      string,
+      { title: string; type: string; url: string; outcomeId: string }
+    >
+  >({});
+  const [resError, setResError] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
@@ -91,12 +128,13 @@ export default function PlanDetailClient({
   }
 
   async function deleteSubject(s: Subject) {
-    if (!confirm(`Delete subject "${s.name}" and its outcomes?`)) return;
+    if (!confirm(`Delete subject "${s.name}" and everything in it?`)) return;
     const { ok, data } = await api(`/api/subjects/${s.id}`, "DELETE");
     if (!ok) return alert(data.error ?? "Could not delete subject");
     await load();
   }
 
+  // ---------- outcomes ----------
   async function addOutcome(subjectId: string) {
     setOutcomeError((e) => ({ ...e, [subjectId]: "" }));
     const { ok, data } = await api(
@@ -132,6 +170,113 @@ export default function PlanDetailClient({
     const { ok, data } = await api(`/api/outcomes/${o.id}`, "DELETE");
     if (!ok) return alert(data.error ?? "Could not delete outcome");
     await load();
+  }
+
+  // ---------- tasks ----------
+  async function addTask(subjectId: string) {
+    const f = taskForm[subjectId] ?? { title: "", hours: "1", outcomeId: "" };
+    setTaskError((e) => ({ ...e, [subjectId]: "" }));
+    const { ok, data } = await api(`/api/subjects/${subjectId}/tasks`, "POST", {
+      title: f.title,
+      estimatedHours: Number(f.hours || 0),
+      outcomeId: f.outcomeId || null,
+    });
+    if (!ok) {
+      setTaskError((e) => ({
+        ...e,
+        [subjectId]: data.error ?? "Could not add task",
+      }));
+      return;
+    }
+    setTaskForm((t) => ({
+      ...t,
+      [subjectId]: { title: "", hours: "1", outcomeId: "" },
+    }));
+    await load();
+  }
+
+  async function editTask(t: Task) {
+    const title = prompt("Task title:", t.title);
+    if (title === null) return;
+    const hours = prompt("Estimated hours:", String(t.estimatedHours));
+    if (hours === null) return;
+    const { ok, data } = await api(`/api/tasks/${t.id}`, "PATCH", {
+      title,
+      estimatedHours: Number(hours),
+    });
+    if (!ok) return alert(data.error ?? "Could not update task");
+    await load();
+  }
+
+  async function setTaskStatus(t: Task, status: string) {
+    const { ok, data } = await api(`/api/tasks/${t.id}`, "PATCH", { status });
+    if (!ok) return alert(data.error ?? "Could not update status");
+    await load();
+  }
+
+  async function deleteTask(t: Task) {
+    if (!confirm("Delete this task?")) return;
+    const { ok, data } = await api(`/api/tasks/${t.id}`, "DELETE");
+    if (!ok) return alert(data.error ?? "Could not delete task");
+    await load();
+  }
+
+  // ---------- resources ----------
+  async function addResource(subjectId: string) {
+    const f = resForm[subjectId] ?? {
+      title: "",
+      type: "Reading",
+      url: "",
+      outcomeId: "",
+    };
+    setResError((e) => ({ ...e, [subjectId]: "" }));
+    const { ok, data } = await api(
+      `/api/subjects/${subjectId}/resources`,
+      "POST",
+      {
+        title: f.title,
+        type: f.type,
+        url: f.url || null,
+        outcomeId: f.outcomeId || null,
+      },
+    );
+    if (!ok) {
+      setResError((e) => ({
+        ...e,
+        [subjectId]: data.error ?? "Could not add resource",
+      }));
+      return;
+    }
+    setResForm((r) => ({
+      ...r,
+      [subjectId]: { title: "", type: "Reading", url: "", outcomeId: "" },
+    }));
+    await load();
+  }
+
+  async function editResource(r: Resource) {
+    const title = prompt("Resource title:", r.title);
+    if (title === null) return;
+    const url = prompt("URL (leave empty for none):", r.url ?? "");
+    if (url === null) return;
+    const { ok, data } = await api(`/api/resources/${r.id}`, "PATCH", {
+      title,
+      url: url || null,
+    });
+    if (!ok) return alert(data.error ?? "Could not update resource");
+    await load();
+  }
+
+  async function deleteResource(r: Resource) {
+    if (!confirm("Delete this resource?")) return;
+    const { ok, data } = await api(`/api/resources/${r.id}`, "DELETE");
+    if (!ok) return alert(data.error ?? "Could not delete resource");
+    await load();
+  }
+
+  function outcomeName(s: Subject, outcomeId: string | null) {
+    if (!outcomeId) return null;
+    return s.outcomes.find((o) => o.id === outcomeId)?.description ?? null;
   }
 
   return (
@@ -186,87 +331,319 @@ export default function PlanDetailClient({
       )}
 
       <ul className="space-y-4">
-        {subjects.map((s) => (
-          <li key={s.id} className="rounded border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold">{s.name}</h3>
-                <p className="text-sm text-gray-600">
-                  {s.deadline
-                    ? `Deadline: ${s.deadline.slice(0, 10)}`
-                    : "No subject deadline"}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => editSubject(s)}
-                  className="rounded border px-3 py-1 text-sm"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteSubject(s)}
-                  className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <p className="text-sm font-medium">Learning outcomes</p>
-              {s.outcomes.length === 0 && (
-                <p className="text-sm text-gray-500">No outcomes yet.</p>
-              )}
-              <ul className="mt-1 space-y-1">
-                {s.outcomes.map((o) => (
-                  <li
-                    key={o.id}
-                    className="flex items-start justify-between gap-2 text-sm"
+        {subjects.map((s) => {
+          const tf = taskForm[s.id] ?? { title: "", hours: "1", outcomeId: "" };
+          const rf = resForm[s.id] ?? {
+            title: "",
+            type: "Reading",
+            url: "",
+            outcomeId: "",
+          };
+          return (
+            <li key={s.id} className="rounded border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold">{s.name}</h3>
+                  <p className="text-sm text-gray-600">
+                    {s.deadline
+                      ? `Deadline: ${s.deadline.slice(0, 10)}`
+                      : "No subject deadline"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => editSubject(s)}
+                    className="rounded border px-3 py-1 text-sm"
                   >
-                    <span>• {o.description}</span>
-                    <span className="flex shrink-0 gap-2">
-                      <button
-                        onClick={() => editOutcome(o)}
-                        className="underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteOutcome(o)}
-                        className="text-red-700 underline"
-                      >
-                        Delete
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-2 flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded border p-2 text-sm"
-                  placeholder="New outcome (e.g. Write typed functions)"
-                  value={newOutcome[s.id] ?? ""}
-                  onChange={(e) =>
-                    setNewOutcome((n) => ({ ...n, [s.id]: e.target.value }))
-                  }
-                />
-                <button
-                  onClick={() => addOutcome(s.id)}
-                  className="rounded border px-3 py-1 text-sm"
-                >
-                  Add
-                </button>
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => deleteSubject(s)}
+                    className="rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              {outcomeError[s.id] && (
-                <p className="mt-1 text-sm text-red-600">
-                  {outcomeError[s.id]}
-                </p>
-              )}
-            </div>
-          </li>
-        ))}
+
+              {/* Outcomes */}
+              <div className="mt-4">
+                <p className="text-sm font-medium">Learning outcomes</p>
+                {s.outcomes.length === 0 && (
+                  <p className="text-sm text-gray-500">No outcomes yet.</p>
+                )}
+                <ul className="mt-1 space-y-1">
+                  {s.outcomes.map((o) => (
+                    <li
+                      key={o.id}
+                      className="flex items-start justify-between gap-2 text-sm"
+                    >
+                      <span>• {o.description}</span>
+                      <span className="flex shrink-0 gap-2">
+                        <button
+                          onClick={() => editOutcome(o)}
+                          className="underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteOutcome(o)}
+                          className="text-red-700 underline"
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded border p-2 text-sm"
+                    placeholder="New outcome (e.g. Write typed functions)"
+                    value={newOutcome[s.id] ?? ""}
+                    onChange={(e) =>
+                      setNewOutcome((n) => ({ ...n, [s.id]: e.target.value }))
+                    }
+                  />
+                  <button
+                    onClick={() => addOutcome(s.id)}
+                    className="rounded border px-3 py-1 text-sm"
+                  >
+                    Add
+                  </button>
+                </div>
+                {outcomeError[s.id] && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {outcomeError[s.id]}
+                  </p>
+                )}
+              </div>
+
+              {/* Tasks */}
+              <div className="mt-5 border-t pt-4">
+                <p className="text-sm font-medium">Tasks</p>
+                {s.tasks.length === 0 && (
+                  <p className="text-sm text-gray-500">No tasks yet.</p>
+                )}
+                <ul className="mt-1 space-y-2">
+                  {s.tasks.map((t) => (
+                    <li key={t.id} className="rounded border p-2 text-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{t.title}</p>
+                          <p className="text-gray-600">
+                            {t.estimatedHours} h
+                            {outcomeName(s, t.outcomeId) &&
+                              ` · Outcome: ${outcomeName(s, t.outcomeId)}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="rounded border p-1"
+                            value={t.status}
+                            onChange={(e) => setTaskStatus(t, e.target.value)}
+                          >
+                            {Object.entries(STATUS_LABEL).map(([v, label]) => (
+                              <option key={v} value={v}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => editTask(t)}
+                            className="underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteTask(t)}
+                            className="text-red-700 underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <input
+                    className="rounded border p-2 text-sm sm:col-span-2"
+                    placeholder="New task (e.g. Finish 20 type exercises)"
+                    value={tf.title}
+                    onChange={(e) =>
+                      setTaskForm((t) => ({
+                        ...t,
+                        [s.id]: { ...tf, title: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0.25"
+                    className="rounded border p-2 text-sm"
+                    placeholder="Hours"
+                    value={tf.hours}
+                    onChange={(e) =>
+                      setTaskForm((t) => ({
+                        ...t,
+                        [s.id]: { ...tf, hours: e.target.value },
+                      }))
+                    }
+                  />
+                  <select
+                    className="rounded border p-2 text-sm"
+                    value={tf.outcomeId}
+                    onChange={(e) =>
+                      setTaskForm((t) => ({
+                        ...t,
+                        [s.id]: { ...tf, outcomeId: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="">No linked outcome</option>
+                    {s.outcomes.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.description}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => addTask(s.id)}
+                    className="rounded border px-3 py-2 text-sm sm:col-span-2"
+                  >
+                    Add task
+                  </button>
+                </div>
+                {taskError[s.id] && (
+                  <p className="mt-1 text-sm text-red-600">{taskError[s.id]}</p>
+                )}
+              </div>
+
+              {/* Resources */}
+              <div className="mt-5 border-t pt-4">
+                <p className="text-sm font-medium">Resources</p>
+                {s.resources.length === 0 && (
+                  <p className="text-sm text-gray-500">No resources yet.</p>
+                )}
+                <ul className="mt-1 space-y-2">
+                  {s.resources.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex flex-wrap items-start justify-between gap-2 text-sm"
+                    >
+                      <div>
+                        <p>
+                          <span className="rounded bg-gray-100 px-1 text-xs">
+                            {r.type}
+                          </span>{" "}
+                          {r.url ? (
+                            <a
+                              href={r.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
+                            >
+                              {r.title}
+                            </a>
+                          ) : (
+                            r.title
+                          )}
+                        </p>
+                        {outcomeName(s, r.outcomeId) && (
+                          <p className="text-gray-600">
+                            Outcome: {outcomeName(s, r.outcomeId)}
+                          </p>
+                        )}
+                      </div>
+                      <span className="flex gap-2">
+                        <button
+                          onClick={() => editResource(r)}
+                          className="underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteResource(r)}
+                          className="text-red-700 underline"
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <input
+                    className="rounded border p-2 text-sm sm:col-span-2"
+                    placeholder="Resource title (e.g. TypeScript Handbook)"
+                    value={rf.title}
+                    onChange={(e) =>
+                      setResForm((r) => ({
+                        ...r,
+                        [s.id]: { ...rf, title: e.target.value },
+                      }))
+                    }
+                  />
+                  <select
+                    className="rounded border p-2 text-sm"
+                    value={rf.type}
+                    onChange={(e) =>
+                      setResForm((r) => ({
+                        ...r,
+                        [s.id]: { ...rf, type: e.target.value },
+                      }))
+                    }
+                  >
+                    {RESOURCE_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded border p-2 text-sm"
+                    value={rf.outcomeId}
+                    onChange={(e) =>
+                      setResForm((r) => ({
+                        ...r,
+                        [s.id]: { ...rf, outcomeId: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="">No linked outcome</option>
+                    {s.outcomes.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.description}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="rounded border p-2 text-sm sm:col-span-2"
+                    placeholder="URL (optional, https://...)"
+                    value={rf.url}
+                    onChange={(e) =>
+                      setResForm((r) => ({
+                        ...r,
+                        [s.id]: { ...rf, url: e.target.value },
+                      }))
+                    }
+                  />
+                  <button
+                    onClick={() => addResource(s.id)}
+                    className="rounded border px-3 py-2 text-sm sm:col-span-2"
+                  >
+                    Add resource
+                  </button>
+                </div>
+                {resError[s.id] && (
+                  <p className="mt-1 text-sm text-red-600">{resError[s.id]}</p>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </main>
   );
