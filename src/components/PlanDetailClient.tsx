@@ -1,5 +1,5 @@
 "use client";
-
+import SuggestionsPanel from "@/components/SuggestionsPanel";
 import { useEffect, useMemo, useState } from "react";
 import { AvailabilityAnalyzer } from "@/lib/availability";
 import Link from "next/link";
@@ -335,6 +335,8 @@ export default function PlanDetailClient({
           </p>
         </section>
       )}
+
+      <SuggestionsPanel planId={planId} />
 
       <form onSubmit={addSubject} className="mb-8 space-y-3 rounded border p-4">
         <h2 className="font-semibold">Add a subject</h2>
