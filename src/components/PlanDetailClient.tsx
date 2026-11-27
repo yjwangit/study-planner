@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AvailabilityAnalyzer } from "@/lib/availability";
 import Link from "next/link";
 
 type Outcome = { id: string; description: string };
@@ -51,9 +52,11 @@ async function api(url: string, method: string, body?: unknown) {
 export default function PlanDetailClient({
   planId,
   planTitle,
+  plan,
 }: {
   planId: string;
   planTitle: string;
+  plan: { deadline: string; studyDays: string[]; hoursPerDay: number };
 }) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +98,17 @@ export default function PlanDetailClient({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const analysis = useMemo(
+    () =>
+      new AvailabilityAnalyzer({
+        deadline: plan.deadline,
+        studyDays: plan.studyDays,
+        hoursPerDay: plan.hoursPerDay,
+        subjects,
+      }).analyze(),
+    [plan, subjects],
+  );
 
   async function addSubject(e: React.FormEvent) {
     e.preventDefault();
@@ -285,6 +299,42 @@ export default function PlanDetailClient({
         ← Back to plans
       </Link>
       <h1 className="mb-6 mt-2 text-2xl font-bold">{planTitle}</h1>
+
+      {!loading && !loadError && (
+        <section className="mb-6 rounded border p-4">
+          <h2 className="font-semibold">Time check</h2>
+          <p className="mt-1 text-sm text-gray-700">
+            Needed: {analysis.requiredHours.toFixed(1)} h · Available until
+            deadline: {analysis.availableHours.toFixed(1)} h (
+            {analysis.studyDaysLeft} study days × {plan.hoursPerDay} h)
+          </p>
+          {analysis.warnings.length === 0 && (
+            <p className="mt-2 text-sm text-green-700">
+              Your workload fits your available time.
+            </p>
+          )}
+          <ul className="mt-2 space-y-1">
+            {analysis.warnings.map((w, i) => (
+              <li
+                key={i}
+                className={`rounded p-2 text-sm ${
+                  w.level === "error"
+                    ? "bg-red-50 text-red-700"
+                    : w.level === "warning"
+                      ? "bg-yellow-50 text-yellow-800"
+                      : "bg-gray-50 text-gray-700"
+                }`}
+              >
+                {w.message}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-gray-500">
+            To change deadline, study days or hours per day, edit the plan on
+            the plans page.
+          </p>
+        </section>
+      )}
 
       <form onSubmit={addSubject} className="mb-8 space-y-3 rounded border p-4">
         <h2 className="font-semibold">Add a subject</h2>

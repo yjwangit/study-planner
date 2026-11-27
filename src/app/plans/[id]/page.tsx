@@ -17,5 +17,15 @@ export default async function PlanDetailPage({
   const plan = await prisma.studyPlan.findFirst({ where: { id, userId } });
   if (!plan) notFound();
 
-  return <PlanDetailClient planId={plan.id} planTitle={plan.title} />;
+  return (
+    <PlanDetailClient
+      planId={plan.id}
+      planTitle={plan.title}
+      plan={{
+        deadline: plan.deadline.toISOString(),
+        studyDays: plan.studyDays,
+        hoursPerDay: plan.hoursPerDay,
+      }}
+    />
+  );
 }
